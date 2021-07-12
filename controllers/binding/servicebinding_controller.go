@@ -18,6 +18,7 @@ package binding
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -265,7 +266,11 @@ func (r *ServiceBindingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if sb.Spec.Provider != "" {
 		cm.Data["provider"] = sb.Spec.Provider
 	}
-
+	if _, ok := psSecret.Data["type"]; !ok {
+		if sb.Spec.Type == "" {
+			return ctrl.Result{}, errors.New("value for `type` not specified in the Secret resource or ServiceBinding resource")
+		}
+	}
 	cm.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(sb.GetObjectMeta(), sb.GroupVersionKind())}
 	log.V(1).Info("Creating ConfigMap resource for binding", "ConfigMap", cm)
 	if err := r.Create(ctx, cm); err != nil {
@@ -383,6 +388,9 @@ func (r *ServiceBindingReconciler) getApplication(ctx context.Context, log logr.
 		}
 		log.V(1).Info("application objects retrieved", "Application", applicationList)
 		applications = append(applications, applicationList.Items...)
+	}
+	if len(applications) == 0 {
+		return applications, ctrl.Result{}, errors.New("empty applications list")
 	}
 	return applications, ctrl.Result{}, nil
 }
